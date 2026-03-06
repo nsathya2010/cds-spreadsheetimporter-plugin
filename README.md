@@ -42,11 +42,11 @@ In your CAP project's `package.json`:
 
 ```json
 {
-   "cds": {
-      "spreadsheetimporter": {
-         "postProcessor": "./srv/spreadsheet-post-processor.js"
-      }
-   }
+  "cds": {
+    "spreadsheetimporter": {
+      "postProcessor": "./srv/spreadsheet-post-processor.js"
+    }
+  }
 }
 ```
 
@@ -56,24 +56,24 @@ In your CAP project's `package.json`:
 
 ```js
 module.exports = async function processSpreadsheet(context) {
-   const { req, entity, data, workbook } = context;
+  const { req, entity, data, workbook } = context;
 
-   // Custom logic here (e.g. queue event, call external API, batch processing)
-   console.log(`Received ${data.length} rows for ${entity.name}`);
-   console.log(`Workbook sheets: ${workbook.sheetNames.join(', ')}`);
+  // Custom logic here (e.g. queue event, call external API, batch processing)
+  console.log(`Received ${data.length} rows for ${entity.name}`);
+  console.log(`Workbook sheets: ${workbook.sheetNames.join(", ")}`);
 
-   return {
-      // Set true to allow plugin's default INSERT after your processing.
-      runDefaultInsert: false,
+  return {
+    // Set true to allow plugin's default INSERT after your processing.
+    runDefaultInsert: false,
 
-      // Optional custom response sent back to caller.
-      response: {
-         entity: entity.name,
-         rows: data.length,
-         inserted: false,
-         message: 'Rows were handled by custom post processor'
-      }
-   };
+    // Optional custom response sent back to caller.
+    response: {
+      entity: entity.name,
+      rows: data.length,
+      inserted: false,
+      message: "Rows were handled by custom post processor",
+    },
+  };
 };
 ```
 
