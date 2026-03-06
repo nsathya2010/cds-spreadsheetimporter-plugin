@@ -2,6 +2,81 @@
 
 This is a plugin for the [CAP](https://cap.cloud.sap/) framework that allows you to import data from spreadsheets into your CAP project.
 
+## Features
+
+- Upload `.xlsx` data to a target CDS entity via OData.
+- Download a sample/template `.xlsx` generated from the target entity model.
+- Optional post-processing hook to handle parsed rows yourself instead of default insert.
+
+## API
+
+### Upload spreadsheet
+
+`PUT /odata/v4/importer/Spreadsheet(entity='<fully.qualified.Entity>')/content`
+
+Content type:
+
+`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
+
+### Download template spreadsheet
+
+`GET /odata/v4/importer/Spreadsheet(entity='<fully.qualified.Entity>')/content`
+
+The generated template contains:
+
+- Header row with entity element names.
+- A sample data row based on CDS data types.
+
+## Post Processing Hook
+
+You can configure a custom processor module. When configured, the plugin parses the spreadsheet and calls your processor with the parsed rows.
+
+Default behavior:
+
+- No processor configured: plugin inserts rows directly (`INSERT ... INTO <entity>`).
+- Processor configured: plugin does not insert unless your processor returns `runDefaultInsert: true`.
+
+### Configuration
+
+In your CAP project's `package.json`:
+
+```json
+{
+   "cds": {
+      "spreadsheetimporter": {
+         "postProcessor": "./srv/spreadsheet-post-processor.js"
+      }
+   }
+}
+```
+
+### Processor module contract
+
+`srv/spreadsheet-post-processor.js`:
+
+```js
+module.exports = async function processSpreadsheet(context) {
+   const { req, entity, data, workbook } = context;
+
+   // Custom logic here (e.g. queue event, call external API, batch processing)
+   console.log(`Received ${data.length} rows for ${entity.name}`);
+   console.log(`Workbook sheets: ${workbook.sheetNames.join(', ')}`);
+
+   return {
+      // Set true to allow plugin's default INSERT after your processing.
+      runDefaultInsert: false,
+
+      // Optional custom response sent back to caller.
+      response: {
+         entity: entity.name,
+         rows: data.length,
+         inserted: false,
+         message: 'Rows were handled by custom post processor'
+      }
+   };
+};
+```
+
 ## Release Process
 
 This project uses [release-it](https://github.com/release-it/release-it) to automate version management and package publishing. The release workflow is configured through GitHub Actions and can be triggered in two ways:
