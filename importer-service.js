@@ -125,14 +125,14 @@ module.exports = class ImporterService extends cds.ApplicationService {
           const importerConfig = this._getImporterConfig();
           const { enabled: customProcessingEnabled, result: customProcessingResult } =
             await this._runCustomDataProcessor({
-            req,
-            entity,
-            data,
-            workbook: {
-              sheetNames: spreadSheet.SheetNames,
-            },
-            config: importerConfig,
-          });
+              req,
+              entity,
+              data,
+              workbook: {
+                sheetNames: spreadSheet.SheetNames,
+              },
+              config: importerConfig,
+            });
 
           const shouldRunDefaultInsert = this._shouldRunDefaultInsert({
             customProcessingEnabled,
