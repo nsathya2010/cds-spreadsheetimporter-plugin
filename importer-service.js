@@ -122,34 +122,39 @@ module.exports = class ImporterService extends cds.ApplicationService {
             entity.elements
           );
 
-          const postProcessResult = await this._runPostProcessor({
+          const importerConfig = this._getImporterConfig();
+          const { enabled: customProcessingEnabled, result: customProcessingResult } =
+            await this._runCustomDataProcessor({
             req,
             entity,
             data,
             workbook: {
               sheetNames: spreadSheet.SheetNames,
             },
+            config: importerConfig,
           });
 
-          if (postProcessResult?.runDefaultInsert === true) {
+          const shouldRunDefaultInsert = this._shouldRunDefaultInsert({
+            customProcessingEnabled,
+            customProcessingResult,
+            importerConfig,
+          });
+
+          if (shouldRunDefaultInsert) {
             console.log(
-              `Post processor requested default insert for ${data.length} rows into ${entity.name}`
+              `Inserting ${data.length} rows into ${entity.name}`
             );
             await cds.db.run(INSERT(data).into(entity.name));
-          } else if (!postProcessResult) {
-            console.log(`Inserting ${data.length} rows into ${entity.name}`);
-            await cds.db.run(INSERT(data).into(entity.name));
           } else {
-            console.log('Post processing completed without default insert');
+            console.log('Custom data processing completed without default insert');
           }
 
           console.log('Import completed successfully');
           return (
-            postProcessResult?.response || {
+            customProcessingResult?.response || {
               entity: entity.name,
               rows: data.length,
-              inserted:
-                !postProcessResult || postProcessResult.runDefaultInsert === true,
+              inserted: shouldRunDefaultInsert,
             }
           );
         } catch (xlsxError) {
@@ -221,33 +226,80 @@ module.exports = class ImporterService extends cds.ApplicationService {
     }
   }
 
-  async _runPostProcessor(context) {
-    const pluginConfig =
+  _getImporterConfig() {
+    return (
       cds.env?.spreadsheetimporter ||
       cds.env?.requires?.['cds-spreadsheetimporter-plugin'] ||
-      {};
+      {}
+    );
+  }
+
+  _shouldRunDefaultInsert({
+    customProcessingEnabled,
+    customProcessingResult,
+    importerConfig,
+  }) {
+    if (customProcessingResult?.runDefaultInsert === true) {
+      return true;
+    }
+
+    if (customProcessingResult?.skipDefaultInsert === true) {
+      return false;
+    }
+
+    if (!customProcessingEnabled) {
+      return true;
+    }
+
+    if (
+      importerConfig.skipDefaultProcessing === true ||
+      importerConfig.skipDefaultInsertWhenCustomProcessing === true ||
+      importerConfig.skipInsertWhenCustomProcessing === true
+    ) {
+      return false;
+    }
+
+    // Backward compatibility: previous behavior skipped default insert whenever
+    // a processor returned a result object.
+    if (customProcessingResult) {
+      return false;
+    }
+
+    return true;
+  }
+
+  async _runCustomDataProcessor(context) {
+    const pluginConfig = context.config || this._getImporterConfig();
 
     const processorPath =
-      pluginConfig.postProcessor || pluginConfig.postProcessorModule;
+      pluginConfig.customDataProcessor ||
+      pluginConfig.customDataProcessorModule ||
+      pluginConfig.postProcessor ||
+      pluginConfig.postProcessorModule;
+
     if (!processorPath) {
-      return null;
+      return { enabled: false, result: null };
     }
 
     const resolvedPath = path.isAbsolute(processorPath)
       ? processorPath
       : path.resolve(cds.root, processorPath);
 
-    let postProcessor = require(resolvedPath);
-    if (postProcessor && typeof postProcessor.process === 'function') {
-      postProcessor = postProcessor.process;
+    let customDataProcessor = require(resolvedPath);
+    if (
+      customDataProcessor &&
+      typeof customDataProcessor.process === 'function'
+    ) {
+      customDataProcessor = customDataProcessor.process;
     }
 
-    if (typeof postProcessor !== 'function') {
+    if (typeof customDataProcessor !== 'function') {
       throw new Error(
-        `Configured post processor '${resolvedPath}' does not export a function`
+        `Configured custom data processor '${resolvedPath}' does not export a function`
       );
     }
 
-    return await postProcessor(context);
+    const result = await customDataProcessor(context);
+    return { enabled: true, result };
   }
 };

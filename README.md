@@ -27,14 +27,14 @@ The generated template contains:
 - Header row with entity element names.
 - A sample data row based on CDS data types.
 
-## Post Processing Hook
+## Custom Data Processing Hook
 
 You can configure a custom processor module. When configured, the plugin parses the spreadsheet and calls your processor with the parsed rows.
 
 Default behavior:
 
 - No processor configured: plugin inserts rows directly (`INSERT ... INTO <entity>`).
-- Processor configured: plugin does not insert unless your processor returns `runDefaultInsert: true`.
+- Processor configured: behavior can be controlled by config and processor return flags.
 
 ### Configuration
 
@@ -43,16 +43,31 @@ In your CAP project's `package.json`:
 ```json
 {
   "cds": {
-    "spreadsheetimporter": {
-      "postProcessor": "./srv/spreadsheet-post-processor.js"
+    "requires": {
+      "cds-spreadsheetimporter-plugin": {
+        "customDataProcessor": "./srv/spreadsheet-custom-data-processor.js",
+        "skipDefaultProcessing": true
+      }
     }
   }
 }
 ```
 
+Supported config keys:
+
+- `customDataProcessor`: module path to your custom data processor.
+- `customDataProcessorModule`: alias of `customDataProcessor`.
+- `skipDefaultProcessing`: if `true`, default insert is skipped whenever custom processing is enabled.
+- `skipDefaultInsertWhenCustomProcessing`: backward compatible alias.
+- `skipInsertWhenCustomProcessing`: backward compatible alias.
+
+Backward compatibility:
+
+- `postProcessor` and `postProcessorModule` are still supported, but `customDataProcessor` is the preferred naming.
+
 ### Processor module contract
 
-`srv/spreadsheet-post-processor.js`:
+`srv/spreadsheet-custom-data-processor.js`:
 
 ```js
 module.exports = async function processSpreadsheet(context) {
@@ -63,15 +78,18 @@ module.exports = async function processSpreadsheet(context) {
   console.log(`Workbook sheets: ${workbook.sheetNames.join(", ")}`);
 
   return {
-    // Set true to allow plugin's default INSERT after your processing.
+    // Optional override: force plugin's default INSERT after your processing.
     runDefaultInsert: false,
+
+    // Optional override: force skip default insert.
+    skipDefaultInsert: true,
 
     // Optional custom response sent back to caller.
     response: {
       entity: entity.name,
       rows: data.length,
       inserted: false,
-      message: "Rows were handled by custom post processor",
+      message: "Rows were handled by custom data processor",
     },
   };
 };
